@@ -5,10 +5,10 @@ dotenv.config();
 
 const connectDB = async () => {
   try {
-    const uri = process.env.MONGO_URI;
-       console.log(process.env.MONGO_URI);
+    const uri = process.env.MONGO_URI || "mongodb://localhost:27017/instapay";
+
     await mongoose.connect(uri, {
-      serverSelectionTimeoutMS: 5000, // Fail fast if DB unreachable
+      serverSelectionTimeoutMS: 5000, 
     });
 
     console.log(`✅  MongoDB connected: ${mongoose.connection.host}`);
@@ -22,7 +22,7 @@ const connectDB = async () => {
     });
   } catch (err) {
     console.error("❌  MongoDB connection failed:", err.message);
-    process.exit(1); // Exit so the app doesn't start with no DB
+    process.exit(1); 
   }
 };
 

@@ -6,10 +6,8 @@ import { auth } from "../middleware/auth.js";
 
 const router = express.Router();
 
-// All account routes require authentication
 router.use(auth);
 
-// ── Zod Schemas ────────────────────────────────────────────────────────────
 
 const DepositSchema = z.object({
   amount: z
@@ -27,7 +25,6 @@ const TransferSchema = z.object({
   note: z.string().max(100).optional().default(""),
 });
 
-// ── GET /api/account/balance ───────────────────────────────────────────────
 router.get("/balance", async (req, res) => {
   try {
     const account = await Account.findOne({ userId: req.userId });
@@ -42,7 +39,6 @@ router.get("/balance", async (req, res) => {
   }
 });
 
-// ── POST /api/account/deposit ──────────────────────────────────────────────
 router.post("/deposit", async (req, res) => {
   try {
     const parsed = DepositSchema.safeParse(req.body);
@@ -75,8 +71,6 @@ router.post("/deposit", async (req, res) => {
   }
 });
 
-// ── POST /api/account/transfer ─────────────────────────────────────────────
-// Uses a MongoDB session + atomic transaction so money is never lost/doubled.
 router.post("/transfer", async (req, res) => {
   const session = await mongoose.startSession();
 
@@ -91,21 +85,18 @@ router.post("/transfer", async (req, res) => {
 
     const { toUserId, amount, note } = parsed.data;
 
-    // Prevent sending money to yourself
     if (toUserId === String(req.userId)) {
       return res.status(400).json({ message: "Cannot transfer to yourself" });
     }
 
     session.startTransaction();
 
-    // 1. Verify recipient user exists
     const recipient = await User.findById(toUserId).session(session);
     if (!recipient) {
       await session.abortTransaction();
       return res.status(404).json({ message: "Recipient not found" });
     }
 
-    // 2. Debit sender — only succeeds if balance >= amount
     const senderAccount = await Account.findOneAndUpdate(
       { userId: req.userId, balance: { $gte: amount } },
       { $inc: { balance: -amount } },
@@ -117,7 +108,6 @@ router.post("/transfer", async (req, res) => {
       return res.status(400).json({ message: "Insufficient balance" });
     }
 
-    // 3. Credit recipient
     const recipientAccount = await Account.findOneAndUpdate(
       { userId: toUserId },
       { $inc: { balance: amount } },
@@ -129,7 +119,6 @@ router.post("/transfer", async (req, res) => {
       return res.status(404).json({ message: "Recipient account not found" });
     }
 
-    // 4. Record transaction for audit trail / history
     await Transaction.create(
       [
         {
@@ -158,8 +147,6 @@ router.post("/transfer", async (req, res) => {
   }
 });
 
-// ── GET /api/account/transactions ─────────────────────────────────────────
-// Returns full transaction history for the logged-in user (sent + received)
 router.get("/transactions", async (req, res) => {
   try {
     const page  = Math.max(1, parseInt(req.query.page) || 1);
@@ -219,8 +206,6 @@ router.get("/transactions", async (req, res) => {
   }
 });
 
-// ── GET /api/account/stats ─────────────────────────────────────────────────
-// Summary stats for the dashboard (total sent, received, tx count)
 router.get("/stats", async (req, res) => {
   try {
     const [sent, received, account] = await Promise.all([
