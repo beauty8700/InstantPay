@@ -1,5 +1,6 @@
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import { useState } from "react";
+import { clearSession } from "../api.js";
 
 const navItems = [
   { path: "/home", icon: "🏠", label: "Home" },
@@ -40,7 +41,10 @@ function AppLayout() {
 
         <button
           className="sidebar-logout"
-          onClick={() => navigate("/signin")}
+          onClick={() => {
+            clearSession();
+            navigate("/signin");
+          }}
         >
           <span>🚪</span>
           <span>Logout</span>

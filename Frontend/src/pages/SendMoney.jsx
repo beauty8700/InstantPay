@@ -1,12 +1,14 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { getBalance, transferMoney } from "../api.js";
 
 function SendMoney() {
   const navigate = useNavigate();
   const location = useLocation();
   const user = location.state?.user || {
     name: "Rahul Sharma",
-    upi: "rahul@instapay",
+    username: "rahul@instapay",
+    id: "",
     avatar: "RS",
     color: "#e879a0",
   };
@@ -15,17 +17,57 @@ function SendMoney() {
   const [note, setNote] = useState("");
   const [step, setStep] = useState("enter"); // enter | confirm | success
   const [pin, setPin] = useState("");
+  const [balance, setBalance] = useState(0);
+  const [processing, setProcessing] = useState(false);
+  const [error, setError] = useState("");
 
   const quickAmounts = [100, 200, 500, 1000, 2000, 5000];
 
   const handlePay = () => {
     if (!amount || isNaN(amount) || Number(amount) <= 0) return;
+    if (Number(amount) > balance) {
+      setError("Insufficient balance for this payment.");
+      return;
+    }
+    setError("");
     setStep("confirm");
   };
 
-  const handleConfirm = () => {
+  useEffect(() => {
+    const loadBalance = async () => {
+      try {
+        const data = await getBalance();
+        setBalance(data.balance || 0);
+      } catch {
+        // Keep screen usable even if balance endpoint fails.
+      }
+    };
+
+    loadBalance();
+  }, []);
+
+  const handleConfirm = async () => {
     if (pin.length < 4) return;
-    setStep("success");
+    if (!user.id) {
+      setError("Please select a recipient from contacts.");
+      return;
+    }
+
+    try {
+      setProcessing(true);
+      setError("");
+      const result = await transferMoney({
+        toUserId: user.id,
+        amount: Number(amount),
+        note,
+      });
+      setBalance(result.newBalance ?? balance);
+      setStep("success");
+    } catch (err) {
+      setError(err.message || "Transfer failed");
+    } finally {
+      setProcessing(false);
+    }
   };
 
   if (step === "success") {
@@ -72,7 +114,7 @@ function SendMoney() {
             </div>
             <div>
               <div className="sm-name">{user.name}</div>
-              <div className="sm-upi">{user.upi}</div>
+              <div className="sm-upi">{user.username}</div>
             </div>
           </div>
 
@@ -94,6 +136,8 @@ function SendMoney() {
             />
           </div>
 
+          {error && <div className="form-error">{error}</div>}
+
           <div className="confirm-actions">
             <button className="btn-secondary" onClick={() => setStep("enter")}>
               ← Back
@@ -101,9 +145,9 @@ function SendMoney() {
             <button
               className="btn-primary"
               onClick={handleConfirm}
-              disabled={pin.length < 4}
+              disabled={pin.length < 4 || processing}
             >
-              Pay Now
+              {processing ? "Processing..." : "Pay Now"}
             </button>
           </div>
         </div>
@@ -125,7 +169,7 @@ function SendMoney() {
           </div>
           <div>
             <div className="sm-name">{user.name}</div>
-            <div className="sm-upi">{user.upi}</div>
+            <div className="sm-upi">{user.username}</div>
           </div>
         </div>
 
@@ -165,7 +209,9 @@ function SendMoney() {
         />
 
         {/* Balance */}
-        <div className="available-bal">Available balance: ₹24,580</div>
+        <div className="available-bal">Available balance: ₹{Number(balance || 0).toLocaleString("en-IN")}</div>
+
+        {error && <div className="form-error">{error}</div>}
 
         <button
           className="pay-now-btn"

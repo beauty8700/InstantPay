@@ -15,7 +15,20 @@ function SignUp() {
       if (!form.firstName || !form.lastName || !form.mobile) {
         setError("Please fill all fields."); return;
       }
+      if (!/^\d{10}$/.test(form.mobile)) {
+        setError("Mobile number must be exactly 10 digits.");
+        return;
+      }
+      if (form.email && !/^\S+@\S+\.\S+$/.test(form.email)) {
+        setError("Please enter a valid email address.");
+        return;
+      }
       setError(""); setStep(2);
+      return;
+    }
+
+    if (form.password.length < 8) {
+      setError("Password must be at least 8 characters.");
       return;
     }
 
@@ -27,11 +40,11 @@ function SignUp() {
     try {
       const username = form.email?.trim() || `${form.mobile}@instapay`;
       const result = await signup({
-        firstName: form.firstName,
-        lastName: form.lastName,
+        firstName: form.firstName.trim(),
+        lastName: form.lastName.trim(),
         username,
         mobile: form.mobile,
-        email: form.email || undefined,
+        email: form.email.trim() || undefined,
         password: form.password,
       });
       saveSession(result.token, result.user);

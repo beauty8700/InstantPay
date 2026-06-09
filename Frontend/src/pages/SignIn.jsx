@@ -15,7 +15,7 @@ function SignIn() {
     }
 
     try {
-      const result = await login({ username: form.username, password: form.password });
+      const result = await login({ username: form.username.trim(), password: form.password });
       saveSession(result.token, result.user);
       navigate("/home");
     } catch (err) {

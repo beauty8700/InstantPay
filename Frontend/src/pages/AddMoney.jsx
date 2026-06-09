@@ -1,9 +1,13 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { depositMoney, getBalance } from "../api.js";
 
 function AddMoney() {
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState("upi");
   const [success, setSuccess] = useState(false);
+  const [processing, setProcessing] = useState(false);
+  const [balance, setBalance] = useState(0);
+  const [error, setError] = useState("");
 
   const quickAmounts = [500, 1000, 2000, 5000, 10000];
 
@@ -15,9 +19,37 @@ function AddMoney() {
 
   const banks = ["SBI", "HDFC", "ICICI", "Axis", "Kotak", "PNB"];
 
-  const handleAdd = () => {
+  useEffect(() => {
+    const loadBalance = async () => {
+      try {
+        const data = await getBalance();
+        setBalance(data.balance || 0);
+      } catch {
+        // Keep page interactive even if balance fetch fails.
+      }
+    };
+
+    loadBalance();
+  }, []);
+
+  const handleAdd = async () => {
     if (!amount || Number(amount) <= 0) return;
-    setSuccess(true);
+    if (Number(amount) > 100000) {
+      setError("Maximum single add amount is ₹1,00,000.");
+      return;
+    }
+
+    try {
+      setProcessing(true);
+      setError("");
+      const result = await depositMoney(Number(amount));
+      setBalance(result.balance || balance);
+      setSuccess(true);
+    } catch (err) {
+      setError(err.message || "Failed to add money");
+    } finally {
+      setProcessing(false);
+    }
   };
 
   if (success) {
@@ -29,7 +61,7 @@ function AddMoney() {
           <p className="success-desc">
             ₹{Number(amount).toLocaleString()} has been added to your InstaPay wallet.
           </p>
-          <div className="success-ref">New Balance: ₹{(24580 + Number(amount)).toLocaleString()}</div>
+          <div className="success-ref">New Balance: ₹{Number(balance || 0).toLocaleString("en-IN")}</div>
           <button
             className="btn-primary"
             style={{ marginTop: "1.5rem" }}
@@ -49,7 +81,7 @@ function AddMoney() {
       {/* Balance */}
       <div className="wallet-balance-card">
         <div className="wb-label">Current Wallet Balance</div>
-        <div className="wb-amount">₹ 24,580.00</div>
+        <div className="wb-amount">₹ {Number(balance || 0).toLocaleString("en-IN")}</div>
       </div>
 
       {/* Amount */}
@@ -128,10 +160,14 @@ function AddMoney() {
         className="pay-now-btn"
         style={{ marginTop: "1.5rem" }}
         onClick={handleAdd}
-        disabled={!amount || Number(amount) <= 0}
+        disabled={!amount || Number(amount) <= 0 || processing}
       >
-        ➕ Add ₹{amount ? Number(amount).toLocaleString() : "0"}
+        {processing
+          ? "Processing..."
+          : `➕ Add ₹${amount ? Number(amount).toLocaleString() : "0"}`}
       </button>
+
+      {error && <div className="form-error">{error}</div>}
 
       <p className="secure-note">🔒 256-bit SSL encrypted. Your data is safe.</p>
     </div>

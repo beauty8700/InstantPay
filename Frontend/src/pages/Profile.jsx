@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { clearSession } from "../api.js";
+import { clearSession, getMe, updateProfile, saveSession } from "../api.js";
 
 function Profile() {
   const navigate = useNavigate();
@@ -8,16 +8,36 @@ function Profile() {
   const [form, setForm] = useState({
     firstName: "User",
     lastName: "",
-    email: "",
-    phone: "",
-    upi: "user@instapay",
+    username: "",
   });
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
   useEffect(() => {
-    const userData = localStorage.getItem("user");
-    if (userData) {
-      setForm(JSON.parse(userData));
-    }
+    const load = async () => {
+      try {
+        const data = await getMe();
+        const nextForm = {
+          firstName: data.user?.firstName || "",
+          lastName: data.user?.lastName || "",
+          username: data.user?.username || "",
+        };
+        setForm(nextForm);
+        const userData = localStorage.getItem("user");
+        if (userData) {
+          const local = JSON.parse(userData);
+          saveSession(localStorage.getItem("token"), {
+            ...local,
+            ...nextForm,
+          });
+        }
+      } catch (err) {
+        setError(err.message || "Failed to load profile");
+      }
+    };
+
+    load();
   }, []);
 
   const handleChange = (k, v) => setForm((f) => ({ ...f, [k]: v }));
@@ -30,7 +50,7 @@ function Profile() {
       <div className="profile-hero">
         <div className="profile-avatar">AK</div>
         <div className="profile-name">{form.firstName} {form.lastName}</div>
-        <div className="profile-upi">{form.upi}</div>
+        <div className="profile-upi">{form.username}</div>
         <div className="kyc-badge">✅ KYC Verified</div>
       </div>
 
@@ -46,9 +66,6 @@ function Profile() {
         {[
           { label: "First Name", key: "firstName" },
           { label: "Last Name", key: "lastName" },
-          { label: "Email", key: "email" },
-          { label: "Phone", key: "phone" },
-          { label: "UPI ID", key: "upi" },
         ].map(({ label, key }) => (
           <div key={key} className="profile-field">
             <div className="field-label">{label}</div>
@@ -64,10 +81,53 @@ function Profile() {
           </div>
         ))}
 
+        <div className="profile-field">
+          <div className="field-label">Username</div>
+          <div className="field-value">{form.username}</div>
+        </div>
+
         {editing && (
-          <button className="btn-primary" style={{ marginTop: "1rem" }} onClick={() => {
-            localStorage.setItem("user", JSON.stringify(form));
-            setEditing(false);
+          <div className="profile-field">
+            <div className="field-label">New Password (optional)</div>
+            <input
+              className="field-input"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Leave blank to keep current password"
+            />
+          </div>
+        )}
+
+        {error && <div className="form-error">{error}</div>}
+        {success && <div className="kyc-badge" style={{ marginTop: "1rem" }}>{success}</div>}
+
+        {editing && (
+          <button className="btn-primary" style={{ marginTop: "1rem" }} onClick={async () => {
+            try {
+              setError("");
+              setSuccess("");
+              const payload = {
+                firstName: form.firstName,
+                lastName: form.lastName,
+              };
+              if (password.trim()) payload.password = password.trim();
+
+              const updated = await updateProfile(payload);
+              const userData = localStorage.getItem("user");
+              if (userData) {
+                const local = JSON.parse(userData);
+                saveSession(localStorage.getItem("token"), {
+                  ...local,
+                  ...updated.user,
+                });
+              }
+              setPassword("");
+              setEditing(false);
+              setSuccess("Profile updated successfully");
+            } catch (err) {
+              setError(err.message || "Failed to update profile");
+            }
           }}>
             Save Changes
           </button>

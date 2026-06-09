@@ -11,15 +11,15 @@ router.use(auth);
 
 const DepositSchema = z.object({
   amount: z
-    .number({ invalid_type_error: "Amount must be a number" })
+    .coerce.number({ invalid_type_error: "Amount must be a number" })
     .positive("Amount must be positive")
     .max(100000, "Maximum single deposit is ₹1,00,000"),
 });
 
 const TransferSchema = z.object({
-  toUserId: z.string().min(1, "Recipient ID is required"),
+  toUserId: z.string().regex(/^[a-f\d]{24}$/i, "Recipient ID is invalid"),
   amount: z
-    .number({ invalid_type_error: "Amount must be a number" })
+    .coerce.number({ invalid_type_error: "Amount must be a number" })
     .positive("Amount must be positive")
     .max(100000, "Maximum single transfer is ₹1,00,000"),
   note: z.string().max(100).optional().default(""),

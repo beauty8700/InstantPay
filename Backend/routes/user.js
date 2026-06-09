@@ -10,14 +10,16 @@ const router = express.Router();
 const SignUpSchema = z.object({
   firstName: z.string().min(2, "First name must be at least 2 characters"),
   lastName:  z.string().min(2, "Last name must be at least 2 characters"),
-  username:  z.string().min(1, "Username is required"),
-  mobile:    z.string().min(10, "Mobile number must be at least 10 digits"),
+  username:  z.string().min(1, "Username is required").transform((v) => v.trim().toLowerCase()),
+  mobile:    z
+    .string()
+    .regex(/^\d{10}$/, "Mobile number must be exactly 10 digits"),
   email:     z.string().email("Email must be a valid email").optional(),
   password:  z.string().min(8, "Password must be at least 8 characters").max(72),
 });
 
 const LoginSchema = z.object({
-  username: z.string().min(1, "Username is required"),
+  username: z.string().min(1, "Username is required").transform((v) => v.trim().toLowerCase()),
   password: z.string().min(1, "Password is required"),
 });
 
@@ -45,10 +47,14 @@ router.post("/signup", async (req, res) => {
     }
 
     const { firstName, lastName, username, mobile, email, password } = parsed.data;
+    const normalizedEmail = email?.trim().toLowerCase();
 
-    const exists = await User.findOne({ $or: [{ username }, { mobile }] });
+    const duplicateChecks = [{ username }, { mobile }];
+    if (normalizedEmail) duplicateChecks.push({ email: normalizedEmail });
+
+    const exists = await User.findOne({ $or: duplicateChecks });
     if (exists) {
-      return res.status(409).json({ message: "An account with this username or mobile already exists" });
+      return res.status(409).json({ message: "An account with this username, mobile, or email already exists" });
     }
 
     const hashedPassword = await bcrypt.hash(password, 12);
@@ -58,7 +64,7 @@ router.post("/signup", async (req, res) => {
       lastName,
       username,
       mobile,
-      email: email || "",
+      email: normalizedEmail,
       password: hashedPassword,
     });
 
@@ -75,6 +81,8 @@ router.post("/signup", async (req, res) => {
         firstName: user.firstName,
         lastName: user.lastName,
         username: user.username,
+        mobile: user.mobile,
+        email: user.email,
       },
     });
   } catch (err) {
@@ -115,6 +123,8 @@ router.post("/login", async (req, res) => {
         firstName: user.firstName,
         lastName: user.lastName,
         username: user.username,
+        mobile: user.mobile,
+        email: user.email,
       },
     });
   } catch (err) {
@@ -155,6 +165,8 @@ router.put("/update", auth, async (req, res) => {
         firstName: updated.firstName,
         lastName: updated.lastName,
         username: updated.username,
+        mobile: updated.mobile,
+        email: updated.email,
       },
     });
   } catch (err) {
@@ -174,18 +186,19 @@ router.get("/me", auth, async (req, res) => {
   }
 });
 
-router.get("/bulk", async (req, res) => {
+router.get("/bulk", auth, async (req, res) => {
   try {
     const filter = (req.query.filter || "").trim();
     const query = filter
       ? {
+          _id: { $ne: req.userId },
           $or: [
             { firstName: { $regex: filter, $options: "i" } },
             { lastName:  { $regex: filter, $options: "i" } },
             { username:  { $regex: filter, $options: "i" } },
           ],
         }
-      : {};
+      : { _id: { $ne: req.userId } };
 
     const users = await User.find(query)
       .select("firstName lastName username")

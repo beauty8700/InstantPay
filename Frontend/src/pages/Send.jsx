@@ -1,26 +1,48 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { searchUsers } from "../api.js";
 
-const allUsers = [
-  { id: 1, name: "Rahul Sharma", upi: "rahul@instapay", avatar: "RS", color: "#e879a0" },
-  { id: 2, name: "Priya Singh", upi: "priya@instapay", avatar: "PS", color: "#a855f7" },
-  { id: 3, name: "Amit Verma", upi: "amit@instapay", avatar: "AV", color: "#3b82f6" },
-  { id: 4, name: "Sneha Rao", upi: "sneha@instapay", avatar: "SR", color: "#10b981" },
-  { id: 5, name: "Karan Mehta", upi: "karan@instapay", avatar: "KM", color: "#f59e0b" },
-  { id: 6, name: "Neha Gupta", upi: "neha@instapay", avatar: "NG", color: "#ef4444" },
-];
+const getAvatar = (name = "User") =>
+  name
+    .split(" ")
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
 
 function Send() {
   const [query, setQuery] = useState("");
+  const [users, setUsers] = useState([]);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const filtered = query.trim()
-    ? allUsers.filter(
-        (u) =>
-          u.name.toLowerCase().includes(query.toLowerCase()) ||
-          u.upi.toLowerCase().includes(query.toLowerCase())
-      )
-    : allUsers;
+  useEffect(() => {
+    const timeoutId = setTimeout(async () => {
+      try {
+        setLoading(true);
+        setError("");
+        const data = await searchUsers(query);
+        const mapped = (data.users || []).map((u) => {
+          const name = `${u.firstName} ${u.lastName}`.trim();
+          return {
+            id: u._id,
+            name,
+            username: u.username,
+            avatar: getAvatar(name),
+            color: "#3b82f6",
+          };
+        });
+        setUsers(mapped);
+      } catch (err) {
+        setError(err.message || "Unable to search users");
+      } finally {
+        setLoading(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [query]);
 
   const handleSend = (user) => {
     navigate("/sendmoney", { state: { user } });
@@ -38,9 +60,12 @@ function Send() {
             type="text"
             className="upi-input"
             placeholder="name@instapay or 9876543210"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
           />
-          <button className="upi-pay-btn">Pay →</button>
+          <button className="upi-pay-btn" onClick={() => setQuery((q) => q.trim())}>Search</button>
         </div>
+        <p className="hint-text">Tip: search by first name, last name, or username</p>
       </div>
 
       {/* QR Section */}
@@ -66,17 +91,22 @@ function Send() {
       </div>
 
       <div className="user-list">
-        {filtered.length === 0 ? (
+        {error && <div className="form-error">{error}</div>}
+        {loading ? (
+          <div className="empty-state">Searching users...</div>
+        ) : users.length === 0 && query.trim() ? (
           <div className="empty-state">No users found for "{query}"</div>
+        ) : users.length === 0 ? (
+          <div className="empty-state">Start typing to search and pay your contacts quickly.</div>
         ) : (
-          filtered.map((user) => (
+          users.map((user) => (
             <div key={user.id} className="user-card">
               <div className="user-avatar" style={{ background: user.color }}>
                 {user.avatar}
               </div>
               <div className="user-info">
                 <div className="user-name">{user.name}</div>
-                <div className="user-upi">{user.upi}</div>
+                <div className="user-upi">{user.username}</div>
               </div>
               <button
                 className="send-btn"

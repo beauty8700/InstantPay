@@ -8,6 +8,12 @@ import AddMoney from "./pages/AddMoney.jsx";
 import Transactions from "./pages/Transactions.jsx";
 import Profile from "./pages/Profile.jsx";
 import AppLayout from "./components/AppLayout.jsx";
+import { isLoggedIn } from "./api.js";
+
+function ProtectedLayout() {
+  if (!isLoggedIn()) return <Navigate to="/signin" replace />;
+  return <AppLayout />;
+}
 
 function App() {
   return (
@@ -16,7 +22,7 @@ function App() {
         <Route path="/" element={<Navigate to="/signin" />} />
         <Route path="/signup" element={<SignUp />} />
         <Route path="/signin" element={<SignIn />} />
-        <Route element={<AppLayout />}>
+        <Route element={<ProtectedLayout />}>
           <Route path="/home" element={<Home />} />
           <Route path="/send" element={<Send />} />
           <Route path="/sendmoney" element={<SendMoney />} />

@@ -1,12 +1,14 @@
 import { useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
+import { getStats, getTransactions } from "../api.js";
 
-const recentTx = [
-  { id: 1, name: "Rahul Sharma", type: "sent", amount: 500, time: "Today, 2:30 PM", avatar: "RS", color: "#e879a0" },
-  { id: 2, name: "Priya Singh", type: "received", amount: 1200, time: "Today, 11:00 AM", avatar: "PS", color: "#a855f7" },
-  { id: 3, name: "Amit Verma", type: "sent", amount: 250, time: "Yesterday, 6:15 PM", avatar: "AV", color: "#3b82f6" },
-  { id: 4, name: "Sneha Rao", type: "received", amount: 800, time: "Yesterday, 9:00 AM", avatar: "SR", color: "#10b981" },
-];
+const getInitials = (name = "User") =>
+  name
+    .split(" ")
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
 
 const quickActions = [
   { label: "Send Money", icon: "💸", path: "/send", color: "#e879a0" },
@@ -18,12 +20,39 @@ const quickActions = [
 function Home() {
   const navigate = useNavigate();
   const [user, setUser] = useState({ firstName: "User", lastName: "" });
+  const [stats, setStats] = useState({ balance: 0 });
+  const [recentTx, setRecentTx] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const hour = new Date().getHours();
+  const greetingLabel = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+
+  const loadDashboard = async () => {
+    try {
+      setLoading(true);
+      setError("");
+      const userData = localStorage.getItem("user");
+      if (userData) {
+        setUser(JSON.parse(userData));
+      }
+
+      const [statsRes, txRes] = await Promise.all([
+        getStats(),
+        getTransactions({ page: 1, limit: 5 }),
+      ]);
+
+      setStats(statsRes);
+      setRecentTx(txRes.transactions || []);
+    } catch (err) {
+      setError(err.message || "Failed to load dashboard");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const userData = localStorage.getItem("user");
-    if (userData) {
-      setUser(JSON.parse(userData));
-    }
+    loadDashboard();
   }, []);
 
   return (
@@ -31,17 +60,19 @@ function Home() {
       {/* Greeting */}
       <div className="greeting">
         <div>
-          <p className="greeting-sub">Good afternoon,</p>
+          <p className="greeting-sub">{greetingLabel},</p>
           <h1 className="greeting-name">{user.firstName} {user.lastName} 👋</h1>
         </div>
-        <div className="notif-btn">🔔</div>
+        <button className="notif-btn" onClick={loadDashboard} title="Refresh dashboard">
+          {loading ? "⏳" : "↻"}
+        </button>
       </div>
 
       {/* Balance Card */}
       <div className="balance-card">
         <div className="balance-card-inner">
           <div className="balance-label">Total Balance</div>
-          <div className="balance-amount">₹ 24,580.00</div>
+          <div className="balance-amount">₹ {Number(stats.balance || 0).toLocaleString("en-IN")}</div>
           <div className="balance-meta">
             <span className="balance-acct">A/C •••• 4291</span>
             <span className="balance-badge">Active ✓</span>
@@ -85,21 +116,29 @@ function Home() {
         <button className="view-all" onClick={() => navigate("/transactions")}>View All →</button>
       </div>
 
+      {error && <div className="form-error">{error}</div>}
+      {loading && <div className="empty-state">Loading your latest account data...</div>}
+
       <div className="tx-list">
-        {recentTx.map((tx) => (
-          <div key={tx.id} className="tx-item">
-            <div className="tx-avatar" style={{ background: tx.color }}>
-              {tx.avatar}
+        {!loading && recentTx.map((tx) => {
+          const name = tx.counterparty?.name || "Unknown";
+          const isSent = tx.type === "sent";
+          return (
+          <div key={tx._id} className="tx-item">
+            <div className="tx-avatar" style={{ background: isSent ? "#e879a0" : "#10b981" }}>
+              {getInitials(name)}
             </div>
             <div className="tx-info">
-              <div className="tx-name">{tx.name}</div>
-              <div className="tx-time">{tx.time}</div>
+              <div className="tx-name">{name}</div>
+              <div className="tx-time">{new Date(tx.createdAt).toLocaleString()}</div>
             </div>
             <div className={`tx-amount ${tx.type}`}>
-              {tx.type === "sent" ? "−" : "+"}₹{tx.amount.toLocaleString()}
+              {isSent ? "−" : "+"}₹{Number(tx.amount || 0).toLocaleString("en-IN")}
             </div>
           </div>
-        ))}
+          );
+        })}
+        {recentTx.length === 0 && !error && <div className="empty-state">No recent transactions.</div>}
       </div>
     </div>
   );

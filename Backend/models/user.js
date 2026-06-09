@@ -5,10 +5,14 @@ const UserSchema = new mongoose.Schema(
     firstName: { type: String, required: true, trim: true },
     lastName:  { type: String, required: true, trim: true },
     username:  { type: String, required: true, unique: true, lowercase: true, trim: true },
+    mobile:    { type: String, required: true, unique: true, trim: true },
+    email:     { type: String, lowercase: true, trim: true },
     password:  { type: String, required: true },
   },
   { timestamps: true }
 );
+
+UserSchema.index({ email: 1 }, { unique: true, sparse: true });
 
 const AccountSchema = new mongoose.Schema(
   {
