@@ -10,25 +10,110 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-const allowedOrigins = (process.env.CLIENT_URL || "")
+const rawAllowedOrigins = [
+  process.env.CLIENT_URL || "",
+  process.env.CORS_ORIGINS || "",
+  process.env.FRONTEND_URL || "",
+]
+  .filter(Boolean)
+  .join(",");
+
+const allowedOrigins = rawAllowedOrigins
   .split(",")
-  .map((origin) => origin.trim())
+  .map((origin) => origin.trim().replace(/^['"]|['"]$/g, ""))
   .filter(Boolean);
+
+const allowAllTraffic = allowedOrigins.includes("*");
+
+const allowVercelPreviews = process.env.ALLOW_VERCEL_PREVIEWS !== "false";
+
+const normalizeOrigin = (value = "") =>
+  value.trim().replace(/\/+$/, "").toLowerCase();
+
+const parseOrigin = (value) => {
+  try {
+    return new URL(value);
+  } catch {
+    return null;
+  }
+};
+
+const wildcardToRegex = (pattern) => {
+  const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`^${escaped.replace(/\*/g, ".*")}$`, "i");
+};
+
+const isAllowedOrigin = (origin) => {
+  if (allowAllTraffic) return true;
+
+  const normalizedOrigin = normalizeOrigin(origin);
+  const parsedOrigin = parseOrigin(normalizedOrigin);
+
+  // If CLIENT_URL is empty, keep behavior permissive.
+  if (allowedOrigins.length === 0) return true;
+
+  // Allow localhost origins while developing.
+  if (
+    process.env.NODE_ENV !== "production" &&
+    /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(normalizedOrigin)
+  ) {
+    return true;
+  }
+
+  // Helpful default for Vercel preview deployments.
+  if (
+    parsedOrigin &&
+    allowVercelPreviews &&
+    parsedOrigin.hostname.toLowerCase().endsWith(".vercel.app")
+  ) {
+    return true;
+  }
+
+  return allowedOrigins.some((allowed) => {
+    const normalizedAllowed = normalizeOrigin(allowed);
+
+    // Support patterns like https://*.vercel.app
+    if (/^https?:\/\/\*\./i.test(normalizedAllowed) && parsedOrigin) {
+      const allowedUrl = parseOrigin(normalizedAllowed.replace("*.", "placeholder."));
+      if (!allowedUrl) return false;
+
+      const suffix = allowedUrl.hostname.replace(/^placeholder\./, "");
+      return (
+        parsedOrigin.protocol === allowedUrl.protocol &&
+        (parsedOrigin.hostname === suffix || parsedOrigin.hostname.endsWith(`.${suffix}`))
+      );
+    }
+
+    if (normalizedAllowed.includes("*")) {
+      return wildcardToRegex(normalizedAllowed).test(normalizedOrigin);
+    }
+
+    return normalizedAllowed === normalizedOrigin;
+  });
+};
 
 app.use(
   cors({
     origin(origin, callback) {
       // Allow non-browser clients and same-origin requests.
       if (!origin) return callback(null, true);
-      if (allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
+      if (isAllowedOrigin(origin)) {
         return callback(null, true);
       }
+      console.warn("CORS blocked origin:", origin);
       return callback(new Error("CORS origin not allowed"));
     },
     credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
 app.use(express.json());
+
+console.log(
+  "CORS allowed origins:",
+  allowAllTraffic ? "* (all origins)" : allowedOrigins.length ? allowedOrigins : "<all>"
+);
 
 app.get("/", (_req, res) => {
   res.json({

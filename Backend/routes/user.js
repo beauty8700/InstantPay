@@ -36,6 +36,29 @@ const UpdateSchema = z
 const signToken = (userId) =>
   jwt.sign({ id: userId }, JWT_SECRET, { expiresIn: "7d" });
 
+const methodNotAllowed = (allowedMethods, hint, exampleBody) => (req, res) => {
+  res.set("Allow", allowedMethods.join(", "));
+  return res.status(405).json({
+    message: "Method not allowed",
+    method: req.method,
+    path: req.originalUrl,
+    allowedMethods,
+    hint,
+    ...(exampleBody ? { exampleBody } : {}),
+  });
+};
+
+router.get(
+  "/signup",
+  methodNotAllowed(["POST"], "Use POST /api/user/signup", {
+    firstName: "Arjun",
+    lastName: "Kumar",
+    username: "arjun@instapay",
+    mobile: "9876543210",
+    password: "StrongPass123",
+  })
+);
+
 router.post("/signup", async (req, res) => {
   try {
     const parsed = SignUpSchema.safeParse(req.body);
@@ -90,6 +113,14 @@ router.post("/signup", async (req, res) => {
     res.status(500).json({ message: "Server error during signup" });
   }
 });
+
+router.get(
+  "/login",
+  methodNotAllowed(["POST"], "Use POST /api/user/login", {
+    username: "arjun@instapay",
+    password: "StrongPass123",
+  })
+);
 
 router.post("/login", async (req, res) => {
   try {
@@ -175,6 +206,15 @@ router.put("/update", auth, async (req, res) => {
   }
 });
 
+router.all(
+  "/update",
+  methodNotAllowed(["PUT"], "Use PUT /api/user/update with Bearer token", {
+    firstName: "Arjun",
+    lastName: "Kumar",
+    password: "NewStrongPass123",
+  })
+);
+
 router.get("/me", auth, async (req, res) => {
   try {
     const user = await User.findById(req.userId).select("-password");
@@ -185,6 +225,11 @@ router.get("/me", auth, async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
+
+router.all(
+  "/me",
+  methodNotAllowed(["GET"], "Use GET /api/user/me with Bearer token")
+);
 
 router.get("/bulk", auth, async (req, res) => {
   try {
@@ -217,5 +262,10 @@ router.get("/bulk", auth, async (req, res) => {
     res.status(500).json({ message: "Server error during user search" });
   }
 });
+
+router.all(
+  "/bulk",
+  methodNotAllowed(["GET"], "Use GET /api/user/bulk?filter=<text> with Bearer token")
+);
 
 export { router };

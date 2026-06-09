@@ -8,6 +8,18 @@ const router = express.Router();
 
 router.use(auth);
 
+const methodNotAllowed = (allowedMethods, hint, exampleBody) => (req, res) => {
+  res.set("Allow", allowedMethods.join(", "));
+  return res.status(405).json({
+    message: "Method not allowed",
+    method: req.method,
+    path: req.originalUrl,
+    allowedMethods,
+    hint,
+    ...(exampleBody ? { exampleBody } : {}),
+  });
+};
+
 
 const DepositSchema = z.object({
   amount: z
@@ -38,6 +50,11 @@ router.get("/balance", async (req, res) => {
     res.status(500).json({ message: "Server error fetching balance" });
   }
 });
+
+router.all(
+  "/balance",
+  methodNotAllowed(["GET"], "Use GET /api/account/balance with Bearer token")
+);
 
 router.post("/deposit", async (req, res) => {
   try {
@@ -70,6 +87,13 @@ router.post("/deposit", async (req, res) => {
     res.status(500).json({ message: "Server error during deposit" });
   }
 });
+
+router.all(
+  "/deposit",
+  methodNotAllowed(["POST"], "Use POST /api/account/deposit with Bearer token", {
+    amount: 500,
+  })
+);
 
 router.post("/transfer", async (req, res) => {
   const session = await mongoose.startSession();
@@ -147,6 +171,15 @@ router.post("/transfer", async (req, res) => {
   }
 });
 
+router.all(
+  "/transfer",
+  methodNotAllowed(["POST"], "Use POST /api/account/transfer with Bearer token", {
+    toUserId: "665f3c17f0f8a6b6a9f7c123",
+    amount: 250,
+    note: "Dinner split",
+  })
+);
+
 router.get("/transactions", async (req, res) => {
   try {
     const page  = Math.max(1, parseInt(req.query.page) || 1);
@@ -206,6 +239,11 @@ router.get("/transactions", async (req, res) => {
   }
 });
 
+router.all(
+  "/transactions",
+  methodNotAllowed(["GET"], "Use GET /api/account/transactions?page=1&limit=20 with Bearer token")
+);
+
 router.get("/stats", async (req, res) => {
   try {
     const [sent, received, account] = await Promise.all([
@@ -231,5 +269,10 @@ router.get("/stats", async (req, res) => {
     res.status(500).json({ message: "Server error fetching stats" });
   }
 });
+
+router.all(
+  "/stats",
+  methodNotAllowed(["GET"], "Use GET /api/account/stats with Bearer token")
+);
 
 export { router };
