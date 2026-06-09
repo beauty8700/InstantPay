@@ -93,7 +93,7 @@ function SignUp() {
                 <input className="form-input" placeholder="9876543210" maxLength={10} value={form.mobile} onChange={(e) => update("mobile", e.target.value)} />
               </div>
               <div className="form-group">
-                <label className="form-label">Email (optional)</label>
+                <label className="form-label">Email</label>
                 <input className="form-input" placeholder="arjun@gmail.com" value={form.email} onChange={(e) => update("email", e.target.value)} />
               </div>
             </>
